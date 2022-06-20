@@ -25,7 +25,8 @@ Although no higher-order genetic interactions were found to be significant, this
 analysis method that can be further improved to study this rare combination of events, highlighting  possible new interactions
 between alternative tumor development paths and new not-cancer-described genes to be further investigated upon.
 
-### Description 
+### Objectives
+
 The code presented here was created in order to tackle the following objectives:
 
 - Collect all possible relevant genomic alterations in TCGA including rare damaging germline variants, LOH and somatic mutations across more than 30 cancer types.
@@ -35,12 +36,14 @@ The code presented here was created in order to tackle the following objectives:
 - Evaluating the evidence of high-order genetic interactions between two genes (_trans_-interactions) using three genomic alterations (_geneA_: germline variants, LOH and _geneB_: somatic mutations).
 
 
+### Description 
+
 This repo is divided in:
 
 - LOH_Calling_Data/ : Code used to obtain a binary matrix for loss of heterozygosity calls on TCGA patients obtained from [Nichols _et al_ (2020)](https://doi.org/10.1038/s41467-020-16399-y) as well as to plot the average LOH per cancer type. Also the scripts used to obtain the intersect between human genome annotation and these calls.
 
 - Somatic_Calling_Data/ : Code used to obtain a binary matrix of somatic mutation information on TCGA patients obtained from [Ellroyy _et al._ (2018)](https://doi.org/10.1016/j.cels.2018.03.002) and [Ding _et al._ (2018)](10.1016/j.cell.2018.03.033).
 
-- 
+- Germline_Data/ :  Includes the code used to perform the Principal Component Analysis to test for population stratification and possible technical artifacts, as well as some of test conducted with some predictors used for the rare damaging germline variant prioritization process
 
-
+- GLMs/ : Includes the snakemake pipeline created to obtain the input and perform all of the Generalized Linear Models necessary to study significant co-occurrences/genetic interactions of  (i) Germline variants:Loss-of-heterozygosity, (ii) Germline variants:Loss-of-heterozygosity:Population ancestry and (iii) Germline variants:Loss-of-heterozygosity:Somatic mutations; these are performed for ~670 combinations of (5) TCGA population ancestries, (34) Cancer Types and (4) Pathogenic Classes created to define rare damaging germline variants. Also includes all of the scripts to test for significant results of this models and plot their results in various ways.

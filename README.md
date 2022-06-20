@@ -37,8 +37,10 @@ The code presented here was created in order to tackle the following objectives:
 
 This repo is divided in:
 
-- LOH_Calling_Data/ : Code used to obtain binary matrix for loss of heterozygosity calls on TCGA patients obtained from [Nichols _et al (2020)](https://doi.org/10.1038/s41467-020-16399-y)
+- LOH_Calling_Data/ : Code used to obtain a binary matrix for loss of heterozygosity calls on TCGA patients obtained from [Nichols _et al_ (2020)](https://doi.org/10.1038/s41467-020-16399-y) as well as to plot the average LOH per cancer type. Also the scripts used to obtain the intersect between human genome annotation and these calls.
+
+- Somatic_Calling_Data/ : Code used to obtain a binary matrix of somatic mutation information on TCGA patients obtained from [Ellroyy _et al._ (2018)](https://doi.org/10.1016/j.cels.2018.03.002) and [Ding _et al._ (2018)](10.1016/j.cell.2018.03.033).
+
+- 
 
 
-
-_Only the code used is show, not data_

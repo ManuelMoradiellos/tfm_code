@@ -18,7 +18,7 @@ as possible cancer driver genes.
 
 This study shows a comprehensive methodology on how to identify significant co-occurrences between two different genomic
 alterations within the same gene and a third interaction in a different gene focusing on rare pathogenic germline
-data of $\sim$10.000 patients collected and curated from the TCGA project, and studied using model-based statistical
+data of ~10.000 patients collected and curated from the TCGA project, and studied using model-based statistical
 methods in a pan-cancer cohort. 
 
 Although no higher-order genetic interactions were found to be significant, this framework poses a large-scale computational

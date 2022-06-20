@@ -1,0 +1,24 @@
+## Germline Mutation Gene A + Somatic Mutation Gene B 
+
+# Use this file to add parameters to the germline pipeline
+
+# Output directory
+outdir : "out_all_genes_test"
+
+# Population params
+pop_params:
+  population_table : "input_files/features/pop_tissue_features.tsv"
+  population_group : ["EUR"] # Not enough time to analyze all population results
+  # population_group : ["AFR", "AMR", "ASIAN", "ALLpop", "EUR"]
+
+# The various classes use to define variants as pathogenic
+class : ["clinvar", "delmis", "plof", "allclass"]
+
+# To which cancer type we apply the filter to
+cancer_type : "input_files/cancer_type_abbreviations.txt"
+
+# Pseudocounts for GLMs
+add_pseudocounts : TRUE
+
+# Gene Sets deemed Significant in 2way Germline Mutation - LOH to be tested in main 3-way Tests
+gene_sets : ["all_genes", "cpgs_plus_others"]

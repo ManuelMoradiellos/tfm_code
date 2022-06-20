@@ -1,0 +1,281 @@
+## GAM + LOH FILTER AND MERGE ##
+
+# Here you will find the main rules for the necessary steps
+# to filter and merge both GAM (mutation) and LOH (Loss-of-
+# heterozygosity) event matrices to feed to the linear models
+#
+# Scripts are placed in scripts/
+# Mandatory input files are located in input_files/
+
+import sys
+from snakemake.exceptions import WorkflowError
+
+
+# Warnings messages obtained from tdido's bollito code:
+class ansitxt:
+    RED = '\033[31m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+
+def warning(msg): 
+    print(f"\n{ansitxt.BOLD}{ansitxt.RED}{msg}{ansitxt.ENDC}\n",file=sys.stderr) 
+
+try:
+    configfile: "config.yaml"
+except WorkflowError:
+    warning("ERROR: config.yaml does not exist or is incorrectly formatted. Please see the README file for details. Quitting now.")
+    sys.exit(1)
+
+
+#{| Define parameters |}#
+OUTDIR = config["outdir"]
+POPS = config["pop_params"]["population_group"]
+CLASSES = config["class"]
+CANCER_TYPES = [line.rstrip() for line in open(config["cancer_type"], "r")]
+GENE_SET = config["gene_sets"]
+
+rule all:
+    input: 
+        twoway_model_input_rds = expand(f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}.RDS", patho_class = CLASSES, ct = CANCER_TYPES, pop_group = POPS),
+        merged_glm_outputs_tsv = expand(f"{OUTDIR}/{{patho_class}}/{{ct}}/2way_3way_merged_glm_output_table_{{patho_class}}_{{ct}}.tsv", patho_class = CLASSES, ct = CANCER_TYPES),
+        merged_glm_outputs_tsv_bck = expand(f"{OUTDIR}/merged_outputs/{{patho_class}}/2way_3way_merged_glm_output_table_{{patho_class}}_{{ct}}.tsv", patho_class = CLASSES, ct = CANCER_TYPES),
+        merged_glm_outputs_folder_yikes = f"{OUTDIR}/merged_outputs.gzip",
+        threeway_AB_model_input_rds_all_genes = expand(f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/3way_AB/all_genes/3way_AB_glm_output_list_{{patho_class}}_{{ct}}_{{pop_group}}_all_genes.RDS", patho_class = CLASSES, ct = CANCER_TYPES, pop_group = POPS),
+        threeway_AB_model_input_rds_cpgs = expand(f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/3way_AB/cpgs/3way_AB_glm_output_list_{{patho_class}}_{{ct}}_{{pop_group}}_cpgs.RDS", patho_class = CLASSES, ct = CANCER_TYPES, pop_group = POPS),
+        geneA_geneB_glm_inputs_rds = expand(f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_AB/rds/2way_AB_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}.RDS", patho_class = CLASSES, ct = CANCER_TYPES, pop_group = POPS),
+        geneA_geneB_glm_inputs_table = expand(f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_AB/tables/2way_AB_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}.tsv", patho_class = CLASSES, ct = CANCER_TYPES, pop_group = POPS),
+        geneA_geneB_glm_outputs_rds = expand(f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_AB/rds/2way_AB_glm_output_list_{{patho_class}}_{{ct}}_{{pop_group}}.RDS", patho_class = CLASSES, ct = CANCER_TYPES, pop_group = POPS),
+        geneA_geneB_glm_outputs_table = expand(f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_AB/tables/2way_AB_glm_output_table_{{patho_class}}_{{ct}}_{{pop_group}}.tsv", patho_class = CLASSES, ct = CANCER_TYPES, pop_group = POPS),
+        geneA_geneB_glm_outputs_table_bck = expand(f"{OUTDIR}/2way_AB_outputs/{{patho_class}}/2way_AB_glm_output_table_{{patho_class}}_{{ct}}_{{pop_group}}.tsv", patho_class = CLASSES, ct = CANCER_TYPES, pop_group = POPS) 
+
+
+rule s1_merge_by_pathoclass:
+    input: 
+        gam_matrix = f"input_files/gam_loh_complete_matrices/gams/{{patho_class}}_complete_gam_revised.tsv",
+        loh_matrix = "input_files/gam_loh_complete_matrices/loh/loh_matrix_nodup_corrected.tsv"
+    output: 
+        merged_matrix_by_patho = f"{OUTDIR}/{{patho_class}}/gamloh_merged_matrix_{{patho_class}}.tsv"
+    resources:
+        mem_mb=24000,
+        walltime=180
+    script: "scripts/1_merge_by_pathoclass.R"
+
+
+rule s2_filter_by_cancer_type: 
+    input:
+        merged_matrix_by_patho = f"{OUTDIR}/{{patho_class}}/gamloh_merged_matrix_{{patho_class}}.tsv"
+    output:
+        merged_matrix_by_patho_ct = f"{OUTDIR}/{{patho_class}}/{{ct}}/gamloh_merged_matrix_{{patho_class}}_{{ct}}.tsv" 
+    params:
+        metadata_table = config["pop_params"]["population_table"], 
+        cancer_type = f"{{ct}}"
+    resources:
+        mem_mb=24000,
+        walltime=180
+    script: "scripts/2_filter_by_cancer_type.R"
+
+
+rule s3_filter_by_pop: 
+    input:
+        merged_matrix_by_patho_ct = f"{OUTDIR}/{{patho_class}}/{{ct}}/gamloh_merged_matrix_{{patho_class}}_{{ct}}.tsv" 
+    output:
+        merged_matrix_by_patho_ct_pop = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/gamloh_merged_matrix_{{patho_class}}_{{ct}}_{{pop_group}}.tsv" 
+    params:
+        metadata_table = config["pop_params"]["population_table"], 
+        population = f"{{pop_group}}"
+    resources:
+        mem_mb=24000,
+        walltime=180
+    script: "scripts/3_filter_by_pop_2way_models.R"
+
+
+rule s4a_obtain_2way_inputs: 
+    input:
+        merged_matrix_by_patho_ct_pop = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/gamloh_merged_matrix_{{patho_class}}_{{ct}}_{{pop_group}}.tsv"
+    output:
+        twoway_model_input_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}.RDS",
+        twoway_model_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_model_table_{{patho_class}}_{{ct}}_{{pop_group}}.tsv"
+    params:
+        population = f"{{pop_group}}",
+        add_pseudocounts = config["add_pseudocounts"]
+    resources:
+        mem_mb=24000,
+        walltime=180
+    script: "scripts/4a_obtain_2way_inputs.R"
+
+
+rule s5a_perform_2way_glm:
+    input:
+        twoway_model_input_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}.RDS",
+        twoway_model_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_model_table_{{patho_class}}_{{ct}}_{{pop_group}}.tsv"
+    output:
+        twoway_model_output_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_glm_output_list_{{patho_class}}_{{ct}}_{{pop_group}}.RDS",
+        twoway_model_output_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_glm_output_table_{{patho_class}}_{{ct}}_{{pop_group}}.tsv"
+    resources:
+        mem_mb=24000,
+        walltime=360
+    script: "scripts/5a_perform_2way_glm.R"
+
+rule s4b_obtain_3way_inputs:
+    input:
+        merged_matrix_by_patho_ct = f"{OUTDIR}/{{patho_class}}/{{ct}}/gamloh_merged_matrix_{{patho_class}}_{{ct}}.tsv" 
+    output:
+        threeway_model_input_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/3way/3way_glm_input_list_{{patho_class}}_{{ct}}.RDS",
+        threeway_model_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/3way/3way_model_table_{{patho_class}}_{{ct}}.tsv"
+    params:
+        metadata_table = config["pop_params"]["population_table"],
+        cancer_type = f"{{ct}}",        
+        add_pseudocounts = config["add_pseudocounts"]
+    resources:
+        mem_mb=24000,
+        walltime=180
+    script: "scripts/4b_obtain_3way_inputs.R"
+
+rule s5b_perform_3way_glm:
+    input:
+        threeway_model_input_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/3way/3way_glm_input_list_{{patho_class}}_{{ct}}.RDS",
+        threeway_model_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/3way/3way_model_table_{{patho_class}}_{{ct}}.tsv"
+    output:
+        threeway_model_output_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/3way/3way_glm_output_list_{{patho_class}}_{{ct}}.RDS",
+        threeway_model_output_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/3way/3way_glm_output_table_{{patho_class}}_{{ct}}.tsv"
+    resources:
+        mem_mb=24000,
+        walltime=360
+    script: "scripts/5b_perform_3way_glm.R"
+
+rule s6_merge_2way_and_3way_models:
+    input:
+        twoway_model_output_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/EUR/2way_glm_output_table_{{patho_class}}_{{ct}}_EUR.tsv",
+        threeway_model_output_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/3way/3way_glm_output_table_{{patho_class}}_{{ct}}.tsv"
+    output:
+        merged_glm_outputs_tsv = f"{OUTDIR}/{{patho_class}}/{{ct}}/2way_3way_merged_glm_output_table_{{patho_class}}_{{ct}}.tsv"
+    resources:
+        mem_mb=24000,
+        walltime=360
+    script: "scripts/6_merge_2way_and_3way_models.R"
+
+rule s7_copy_outputs_for_solip:
+    input:
+        merged_glm_outputs_tsv = f"{OUTDIR}/{{patho_class}}/{{ct}}/2way_3way_merged_glm_output_table_{{patho_class}}_{{ct}}.tsv"
+    output:
+        merged_glm_outputs_tsv_bck = f"{OUTDIR}/merged_outputs/{{patho_class}}/2way_3way_merged_glm_output_table_{{patho_class}}_{{ct}}.tsv"
+    resources:
+        mem_mb=24000,
+        walltime=180
+    shell:
+        "cp {input.merged_glm_outputs_tsv} {output.merged_glm_outputs_tsv_bck}"
+
+rule s8_compress_outputs_for_solip:
+    input:
+        merged_glm_outputs_tsv_bck = expand(f"{OUTDIR}/merged_outputs/{{patho_class}}/2way_3way_merged_glm_output_table_{{patho_class}}_{{ct}}.tsv", patho_class = CLASSES, ct = CANCER_TYPES)
+    output:
+        merged_glm_outputs_folder_yikes = f"{OUTDIR}/merged_outputs.gzip"
+    params:
+        target_dir = f"{OUTDIR}/merged_outputs/"
+    shell:
+        "tar -zcvf {output.merged_glm_outputs_folder_yikes} {params.target_dir}"
+
+
+# Steps for the 3-way GeneA-GeneB interactions #
+rule s9a_obtain_3way_inputs_all_genes:
+    input:
+        merged_matrix_by_patho_ct_pop = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/gamloh_merged_matrix_{{patho_class}}_{{ct}}_{{pop_group}}.tsv",
+        somatic_mutation_matrix = "input_files/somatic_event.tsv",
+        list_of_genes_to_test = "input_files/list_of_genes_to_test.RDS"
+    output:
+        threeway_AB_model_input_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/3way_AB/all_genes/3way_AB_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}_all_genes.RDS"
+    params:
+        metadata_table = config["pop_params"]["population_table"],
+        patho = f"{{patho_class}}",
+        cancer_type = f"{{ct}}",
+        geneset = 'all_genes',      
+        add_pseudocounts = config["add_pseudocounts"],
+        filt_B_freq = 0.02
+    resources:
+        mem_mb=24000,
+        walltime=180
+    script: "scripts/9b_obtain_3way_inputs.R"
+
+
+rule s10a_perform_3way_glm_all_genes:
+    input:
+        threeway_AB_model_input_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/3way_AB/all_genes/3way_AB_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}_all_genes.RDS",
+    output:
+        threeway_AB_model_output_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/3way_AB/all_genes/3way_AB_glm_output_list_{{patho_class}}_{{ct}}_{{pop_group}}_all_genes.RDS",
+    resources:
+        mem_mb=24000,
+        walltime=360
+    script: "scripts/10b_perform_3way_glm.R"
+
+
+rule s9b_obtain_3way_inputs_cpgs:
+    input:
+        merged_matrix_by_patho_ct_pop = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/gamloh_merged_matrix_{{patho_class}}_{{ct}}_{{pop_group}}.tsv",
+        somatic_mutation_matrix = "input_files/somatic_event.tsv",
+        list_of_genes_to_test = "input_files/list_of_genes_to_test.RDS"
+    output:
+        threeway_AB_model_input_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/3way_AB/cpgs/3way_AB_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}_cpgs.RDS"
+    params:
+        metadata_table = config["pop_params"]["population_table"],
+        patho = f"{{patho_class}}",
+        cancer_type = f"{{ct}}",
+        geneset = 'cpgs_plus_others', # cpgs_plus_others       
+        add_pseudocounts = config["add_pseudocounts"],
+        filt_B_freq = 0.02
+    resources:
+        mem_mb=24000,
+        walltime=180
+    script: "scripts/9b_obtain_3way_inputs.R"
+
+
+rule s10b_perform_3way_glm_cpgs:
+    input:
+        threeway_AB_model_input_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/3way_AB/cpgs/3way_AB_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}_cpgs.RDS",
+    output:
+        threeway_AB_model_output_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/3way_AB/cpgs/3way_AB_glm_output_list_{{patho_class}}_{{ct}}_{{pop_group}}_cpgs.RDS",
+    resources:
+        mem_mb=24000,
+        walltime=360
+    script: "scripts/10b_perform_3way_glm.R"
+
+
+# Testing Grounds for GeneA Germline Mut x GeneB Somatic Mut 2-way Interactions, future work #
+
+rule s11_obtain_2way_geneA_geneB_glm_inputs:
+    input:
+        merged_matrix_by_patho_ct_pop = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/gamloh_merged_matrix_{{patho_class}}_{{ct}}_{{pop_group}}.tsv",
+        somatic_mutation_events = "input_files/somatic_event.tsv"
+    output:
+        geneA_geneB_glm_inputs_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_AB/rds/2way_AB_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}.RDS",
+        geneA_geneB_glm_inputs_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_AB/tables/2way_AB_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}.tsv"
+    params:
+        add_pseudocounts = config["add_pseudocounts"],
+        filt_B_freq = 2
+    resources:
+        mem_mb=24000,
+        walltime=240
+    script : "scripts/11_obtain_2way_germsoh_inputs.R"
+
+
+rule s12_perform_2way_geneA_geneB_glm:
+    input:
+        geneA_geneB_glm_inputs_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_AB/rds/2way_AB_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}.RDS",
+        geneA_geneB_glm_inputs_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_AB/tables/2way_AB_glm_input_list_{{patho_class}}_{{ct}}_{{pop_group}}.tsv"
+    output:
+        geneA_geneB_glm_outputs_rds = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_AB/rds/2way_AB_glm_output_list_{{patho_class}}_{{ct}}_{{pop_group}}.RDS",
+        geneA_geneB_glm_outputs_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_AB/tables/2way_AB_glm_output_table_{{patho_class}}_{{ct}}_{{pop_group}}.tsv"
+    resources:
+        mem_mb=24000,
+        walltime= 1440
+    script : "scripts/12_perform_2way_germsom_models.R"
+
+rule s13_copy_2way_AB_table_outputs:
+    input:
+        geneA_geneB_glm_outputs_table = f"{OUTDIR}/{{patho_class}}/{{ct}}/{{pop_group}}/2way_AB/tables/2way_AB_glm_output_table_{{patho_class}}_{{ct}}_{{pop_group}}.tsv"
+    output:
+        geneA_geneB_glm_outputs_table_bck = f"{OUTDIR}/2way_AB_outputs/{{patho_class}}/2way_AB_glm_output_table_{{patho_class}}_{{ct}}_{{pop_group}}.tsv"
+    resources:
+        mem_mb=24000,
+        walltime=180
+    shell:
+        "cp {input.geneA_geneB_glm_outputs_table} {output.geneA_geneB_glm_outputs_table_bck}"
